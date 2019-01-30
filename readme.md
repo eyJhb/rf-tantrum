@@ -3,11 +3,11 @@ This is a third semester project by my group at Aalborg University
 studying computer engineer bachelor.
 
 ## Members
-- @DanielBritze
-- @eyJhb
-- @Lanestolen
-- @Vejlineren
-- @Themihas
+- [@DanielBritze](https://github.com/DanielBritze)
+- [@eyJhb](https://github.com/eyJhb)
+- [@Lanestolen](https://github.com/Lanestolen)
+- [@Vejlineren](https://github.com/Vejlineren)
+- [@Themihas](https://github.com/Themihas)
 
 ## Features
 Can send basic packets using RF-433Mhz between Arduino/Raspberry Pi.
