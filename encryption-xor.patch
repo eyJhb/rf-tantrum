@@ -1,0 +1,157 @@
+diff --git a/arduino/tantrum/com.cpp b/arduino/tantrum/com.cpp
+index 57880cf..8236518 100644
+--- a/arduino/tantrum/com.cpp
++++ b/arduino/tantrum/com.cpp
+@@ -137,6 +137,19 @@ bool receiveData(basepacket *pck_ptr) {
+         Serial.println("decodeManchester failed on header");
+     }
+ 
++    Serial.println("XOR");
++    int testing[56];
++    xorInput(header, 56, testing);
++
++    for(int i = 0; i < 56; i++) {
++        Serial.print(header[i]);
++    }
++    Serial.println();
++    for(int i = 0; i < 56; i++) {
++        Serial.print(testing[i]);
++    }
++    Serial.println();
++
+ 
+     /* Serial.println("header"); */
+     /* for(int i = 0; i < 112; i++) { */
+@@ -176,6 +189,9 @@ bool receiveData(basepacket *pck_ptr) {
+         manBodyCrc[i] = readBit();
+     }
+ 
++    /* int tempBody[512]; */
++
++    /* if(!decodeManchester(manBody, pck_ptr->length*2, pck_ptr->body)) { */
+     if(!decodeManchester(manBody, pck_ptr->length*2, pck_ptr->body)) {
+         Serial.println("decodeManchester failed on body");
+     }
+@@ -183,6 +199,20 @@ bool receiveData(basepacket *pck_ptr) {
+         Serial.println("decodeManchester failed on bodycrc");
+     }
+ 
++    Serial.println("XOR-test");
++    /* int testing[56]; */
++    /* xorInput(header, pck_ptr->length, pck_ptr->body); */
++
++    /* for(int i = 0; i < pck_ptr->length; i++) { */
++    /*     Serial.print(tempBody[i]); */
++    /* } */
++    /* Serial.println(); */
++    /* for(int i = 0; i < pck_ptr->length; i++) { */
++    /*     Serial.print(pck_ptr->body[i]); */
++    /* } */
++    /* Serial.println(); */
++
++
+     // everything is read, verify our header now!
+     // we are doing it now, to not have missed any
+     // potential bits... could maybe be done before
+diff --git a/arduino/tantrum/config.h b/arduino/tantrum/config.h
+index 6d2662a..01242a2 100644
+--- a/arduino/tantrum/config.h
++++ b/arduino/tantrum/config.h
+@@ -6,9 +6,12 @@
+ #define RX_PIN 13
+ #define SAMPLE_SIZE 16
+ 
++const int xor_key[64] = {1,0,1,1,0,1,1,1,1,1,0,1,1,1,1,0,0,0,1,1,1,0,0,0,0,0,1,0,0,1,1,0,1,0,0,0,0,0,0,1,0,0,0,0,1,1,0,0,1,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1};
++
+ const int preamble[8] = {1,0,1,0,1,0,1,0};
+ const int sfd[8] = {1,0,1,0,1,0,1,1};
+ const int DEVICE_ID = 0;
++
+ /* int test[8] = {1,1,1,1,1,1,1,1}; */
+ /* int test[8] = {0,0,0,0,0,0,0,0}; */
+ 
+diff --git a/arduino/tantrum/utils.cpp b/arduino/tantrum/utils.cpp
+index a3c1f8a..631cfb6 100644
+--- a/arduino/tantrum/utils.cpp
++++ b/arduino/tantrum/utils.cpp
+@@ -1,6 +1,13 @@
+ #include <Arduino.h>
+ #include "config.h"
+ 
++
++void xorInput(int data[], int arraySize, int result[]) {
++    for(int i = 0; i < arraySize; i++) {
++        result[i] = data[i] ^ xor_key[i % 64];
++    }
++}
++
+ void printArray(int data[], int arraySize) {
+     bool first = true;
+     for(int i = 0; i < arraySize; i++) {
+diff --git a/arduino/tantrum/utils.h b/arduino/tantrum/utils.h
+index b3fadc0..934be7c 100644
+--- a/arduino/tantrum/utils.h
++++ b/arduino/tantrum/utils.h
+@@ -5,6 +5,7 @@
+ #include <Arduino.h>
+ 
+ //All function prototypes from UTILS.cpp.
++void xorInput(int data[], int arraySize, int result[]);
+ bool compareArray(int array1[], int array2[], int arraySize);
+ bool checkBetween(unsigned long v, unsigned long lower, unsigned long upper);
+ void printArray(int data[], int arraySize);
+diff --git a/rasp/go-home/com/utils.go b/rasp/go-home/com/utils.go
+index 48af722..fa64aa0 100644
+--- a/rasp/go-home/com/utils.go
++++ b/rasp/go-home/com/utils.go
+@@ -7,6 +7,15 @@ import (
+ 	// rpio "github.com/stianeikeland/go-rpio"
+ )
+ 
++func xorInput(data []int) []int {
++	xor_key := []int{1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1}
++	xored := make([]int, len(data))
++	for k, v := range data {
++		xored[k] = v ^ xor_key[k%64]
++	}
++	return xored
++}
++
+ func (c *com) readBit() int {
+ 	state := c.rx_pin.Read()
+ 	// fmt.Println(int(c.avgTime))
+diff --git a/rasp/go-home/protocol/base.go b/rasp/go-home/protocol/base.go
+index 42d788d..c11f302 100644
+--- a/rasp/go-home/protocol/base.go
++++ b/rasp/go-home/protocol/base.go
+@@ -61,6 +61,10 @@ func (b *baseProtocol) Encode() []int {
+ 	crc, _ = sumBin(data, 8)
+ 	crc = complementBin(crc)
+ 
++	// xor our body
++	// xorBody := xorInput(data)
++	// fmt.Println(xorBody)
++
+ 	final := []int{}
+ 	final = append(final, header...)
+ 	final = append(final, data...)
+diff --git a/rasp/go-home/protocol/utils.go b/rasp/go-home/protocol/utils.go
+index 7577131..84a8028 100644
+--- a/rasp/go-home/protocol/utils.go
++++ b/rasp/go-home/protocol/utils.go
+@@ -4,6 +4,15 @@ import (
+ 	"errors"
+ )
+ 
++func xorInput(data []int) []int {
++	xor_key := []int{1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1}
++	xored := make([]int, len(data))
++	for k, v := range data {
++		xored[k] = v ^ xor_key[k%64]
++	}
++	return xored
++}
++
+ func reverse(v []int) []int {
+ 	for i := 0; i < len(v)/2; i++ {
+ 		j := len(v) - i - 1
